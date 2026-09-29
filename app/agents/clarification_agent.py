@@ -43,26 +43,10 @@ def run_clarification_agent(state: GraphState) -> GraphState:
     ]
     clarifying_q = llm.invoke(messages).content.strip()
 
-    # --- SIMULATION MODE ---
-    # In production (with React frontend), this returns clarifying_q to the user
-    # and waits for real input. For now we simulate a user answer.
-    sim_context = (
-        f"Original question: {question}\n"
-        f"Clarifying question: {clarifying_q}"
-    )
-    sim_messages = [
-        SystemMessage(content=SIMULATION_SYSTEM),
-        HumanMessage(content=sim_context),
-    ]
-    simulated_answer = llm.invoke(sim_messages).content.strip()
-
-    new_history = history + [
-        {"agent_question": clarifying_q, "user_answer": simulated_answer}
-    ]
-
     return {
         **state,
-        "clarification_history": new_history,
+        "pending_clarification": clarifying_q,
         "clarification_retries": state.get("clarification_retries", 0) + 1,
         "current_node": "clarification_agent",
     }
+

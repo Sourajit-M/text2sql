@@ -21,6 +21,7 @@ def make_state(**kwargs) -> GraphState:
         "query_result": None,
         "final_answer": None,
         "error_message": None,
+        "pending_clarification": None,
         "current_node": None,
     }
     return {**defaults, **kwargs}

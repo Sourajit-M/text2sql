@@ -12,3 +12,7 @@ wheels/
 
 .pytest_cache
 *cache
+
+# Node / Frontend
+node_modules/
+frontend/dist/

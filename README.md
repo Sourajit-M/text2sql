@@ -132,11 +132,28 @@ docker compose up -d
 uv run python db/seed.py
 ```
 
-### 5. Start the FastAPI Server
+### 5. Start the Application
+
+**Option A — All-in-One (FastAPI + Built React UI):**
 ```bash
+# Build the frontend once
+cd frontend && npm install && npm run build && cd ..
+
+# Start the server
 uv run python main.py
 ```
-Open **[http://localhost:8000/docs](http://localhost:8000/docs)** to access the interactive Swagger API documentation.
+Open **[http://localhost:8000](http://localhost:8000)** to view the interactive UI (or **[http://localhost:8000/docs](http://localhost:8000/docs)** for Swagger API docs).
+
+**Option B — Development Mode (Hot Reloading Frontend):**
+```bash
+# Terminal 1: Backend
+uv run python main.py
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
+Open **[http://localhost:5173](http://localhost:5173)** with instant hot reload.
 
 ---
 

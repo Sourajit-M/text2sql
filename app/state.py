@@ -37,5 +37,8 @@ class GraphState(TypedDict):
     # Terminal error message (when we give up)
     error_message: Optional[str]
 
+    # Pending question for user clarification (if agent is waiting for real user answer)
+    pending_clarification: Optional[str]
+
     # Which node/phase we're currently in (for routing logic)
     current_node: Optional[str]

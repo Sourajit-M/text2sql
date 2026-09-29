@@ -98,8 +98,8 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # Clarification loops back to intent for re-evaluation
-    graph.add_edge("clarification_agent", "intent_agent")
+    # Clarification yields control back to user/client for their answer
+    graph.add_edge("clarification_agent", END)
 
     # Schema → SQL generator
     graph.add_edge("schema_agent", "sql_generator")

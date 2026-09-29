@@ -1,7 +1,6 @@
 """
 Seed script — populates the ecommerce database with realistic synthetic data.
-Run once after `docker compose up -d`:
-    uv run python db/seed.py
+Optimized with bulk multi-row inserts for fast execution over remote connections (Neon, Supabase).
 """
 
 import sys
@@ -47,67 +46,72 @@ CUSTOMERS = [
 
 
 def seed():
+    print("Connecting to database...")
     with engine.begin() as conn:
-        # Truncate in reverse FK order
+        print("Resetting tables...")
         conn.execute(text("TRUNCATE order_items, orders, products, categories, customers RESTART IDENTITY CASCADE"))
 
-        # Insert categories
-        for cat in CATEGORIES:
-            conn.execute(text("INSERT INTO categories (name) VALUES (:n)"), {"n": cat})
+        # 1. Bulk insert categories
+        print("Inserting categories...")
+        cat_values = ", ".join(f"('{c}')" for c in CATEGORIES)
+        conn.execute(text(f"INSERT INTO categories (name) VALUES {cat_values}"))
 
-        # Build category_id map
         rows = conn.execute(text("SELECT category_id, name FROM categories")).fetchall()
         cat_map = {r.name: r.category_id for r in rows}
 
-        # Insert products
-        for pname, pcat, pprice, pstock in PRODUCTS:
-            conn.execute(
-                text("INSERT INTO products (name, category_id, price, stock) VALUES (:n, :c, :p, :s)"),
-                {"n": pname, "c": cat_map[pcat], "p": pprice, "s": pstock},
-            )
+        # 2. Bulk insert products
+        print("Inserting products...")
+        prod_values = ", ".join(
+            f"('{pname}', {cat_map[pcat]}, {pprice}, {pstock})"
+            for pname, pcat, pprice, pstock in PRODUCTS
+        )
+        conn.execute(text(f"INSERT INTO products (name, category_id, price, stock) VALUES {prod_values}"))
 
-        # Build product_id list
         prod_rows = conn.execute(text("SELECT product_id, price FROM products")).fetchall()
         prod_ids = [(r.product_id, float(r.price)) for r in prod_rows]
 
-        # Insert customers
-        for cname, cemail, ccity in CUSTOMERS:
-            conn.execute(
-                text("INSERT INTO customers (name, email, city) VALUES (:n, :e, :c)"),
-                {"n": cname, "e": cemail, "c": ccity},
-            )
+        # 3. Bulk insert customers
+        print("Inserting customers...")
+        cust_values = ", ".join(
+            f"('{cname}', '{cemail}', '{ccity}')"
+            for cname, cemail, ccity in CUSTOMERS
+        )
+        conn.execute(text(f"INSERT INTO customers (name, email, city) VALUES {cust_values}"))
 
         cust_rows = conn.execute(text("SELECT customer_id FROM customers")).fetchall()
         cust_ids = [r.customer_id for r in cust_rows]
 
-        # Insert orders + order_items (last 90 days, weighted toward last 30)
+        # 4. Generate orders and order_items in memory
+        print("Generating orders and items...")
         now = datetime.utcnow()
         random.seed(42)
 
-        for _ in range(300):
+        raw_orders = []
+        for _ in range(150):
             cust_id = random.choice(cust_ids)
-            # Spread over last 18 months; weight recent 30 days 3x
             days_ago = random.choices(
                 range(1, 550),
                 weights=[3 if d <= 30 else 2 if d <= 365 else 1 for d in range(1, 550)],
             )[0]
-            ordered_at = now - timedelta(days=days_ago)
+            ordered_at = (now - timedelta(days=days_ago)).strftime('%Y-%m-%d %H:%M:%S')
             status = random.choices(["completed", "pending", "cancelled"], weights=[80, 10, 10])[0]
+            raw_orders.append((cust_id, status, ordered_at))
 
-            result = conn.execute(
-                text("INSERT INTO orders (customer_id, status, ordered_at) VALUES (:c, :s, :o) RETURNING order_id"),
-                {"c": cust_id, "s": status, "o": ordered_at},
-            )
-            order_id = result.fetchone()[0]
+        # Single bulk insert for all orders
+        order_tuples = ", ".join(f"({c}, '{s}', '{o}')" for c, s, o in raw_orders)
+        result = conn.execute(text(f"INSERT INTO orders (customer_id, status, ordered_at) VALUES {order_tuples} RETURNING order_id"))
+        order_ids = [r[0] for r in result.fetchall()]
 
-            # 1–4 items per order
+        # Single bulk insert for all order items
+        raw_items = []
+        for order_id in order_ids:
             items = random.sample(prod_ids, k=random.randint(1, 4))
             for pid, uprice in items:
                 qty = random.randint(1, 5)
-                conn.execute(
-                    text("INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (:o, :p, :q, :u)"),
-                    {"o": order_id, "p": pid, "q": qty, "u": uprice},
-                )
+                raw_items.append((order_id, pid, qty, uprice))
+
+        item_tuples = ", ".join(f"({o}, {p}, {q}, {u})" for o, p, q, u in raw_items)
+        conn.execute(text(f"INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES {item_tuples}"))
 
     print("Database seeded successfully.")
 
