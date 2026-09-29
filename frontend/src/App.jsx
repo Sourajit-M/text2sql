@@ -42,7 +42,9 @@ export default function App() {
     setError(null)
 
     try {
-      const apiUrl = window.location.port === '5173' ? '/api/query' : 'http://127.0.0.1:8000/query'
+      // In Vite dev (port 5173), proxy through '/api/query'
+      // In production / Docker, use relative '/query'
+      const apiUrl = window.location.port === '5173' ? '/api/query' : '/query'
       
       const response = await fetch(apiUrl, {
         method: 'POST',
